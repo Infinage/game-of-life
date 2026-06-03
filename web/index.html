@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Game of Life</title>
+    <script src="wasm_exec.js"></script>
+</head>
+<body>
+    <script>
+        // Initialize the Wasm Module
+        const go = new Go();
+        WebAssembly.instantiateStreaming(fetch("gol.wasm"), go.importObject).then((result) => {
+            go.run(result.instance); // calls main() from `main.go`
+            console.log("Wasm initialized!");
+            runTest();
+        });
+
+        function runTest() {
+            // A horizontal blinker: (-1,0), (0,0), (1,0)
+            const blinker = new Int32Array([-1, 0, 0, 0, 1, 0]);
+            
+            console.log("Initial state (Int32Array):", blinker);
+            const res = GOLNext(blinker);
+
+            if (res.success) {
+                const nextGen = new Int32Array(res.data.buffer);
+                console.log("Next generation (Int32Array):", nextGen);
+            } else {
+                console.error("Wasm Error:", res.error);
+            }
+        }
+    </script>
+</body>
+</html>
