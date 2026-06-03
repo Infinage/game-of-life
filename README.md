@@ -1,9 +1,4 @@
-### The README
-
-Here is a clean, developer-focused `README.md` that highlights the raw memory performance and the TinyGo/Wasm architecture.
-
-```markdown
-# Conway's Game of Life (Go + WebAssembly)
+# Conway's Game of Life
 
 A blazingly fast, infinite-grid implementation of Conway's Game of Life. Built with Go, compiled to WebAssembly via TinyGo, and rendered on a zero-dependency HTML5 Canvas.
 

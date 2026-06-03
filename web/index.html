@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Conway's Game of Life (Wasm)</title>
+    <title>Conway's Game of Life</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="wasm_exec.js"></script>
@@ -13,17 +13,15 @@
             font-family: 'Press Start 2P', cursive;
             text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff;
         }
-        /* Prevent elastic bouncing on mobile iOS */
-        body { 
-            overflow: hidden; 
+        #gameCanvas {
             touch-action: none; 
         }
     </style>
 </head>
-<body class="bg-gray-900 h-screen flex flex-col text-white">
+<body class="bg-gray-900 h-[100dvh] flex flex-col text-white overflow-x-hidden">
   
   <main class="flex flex-col h-full w-full">
-    <header class="bg-gray-900 border-b-4 border-blue-500 p-3 md:p-4 flex-shrink-0 shadow-lg z-10">
+    <header class="bg-gray-900 border-b-4 border-blue-500 p-3 md:p-4 flex-shrink-0 shadow-lg z-10">    
       <h1 class="text-xl md:text-3xl text-center text-yellow-400 tracking-widest arcade-text leading-relaxed">
         CONWAY'S GAME OF LIFE
       </h1>
@@ -89,6 +87,7 @@
       let lastCellY = null;
       let lastMouseX = 0;
       let lastMouseY = 0;
+      let initialPinchDistance = null; // Tracks distance between two fingers for pinch zoom
 
       // --- Responsive Canvas Sizing ---
       const resizeObserver = new ResizeObserver(() => {
@@ -277,11 +276,16 @@
       canvas.addEventListener('touchstart', (e) => {
           e.preventDefault(); // Stop mobile scroll pull-to-refresh
           if (e.touches.length === 2) {
-              // Two fingers = Pan
+              // Two fingers = Pan & Zoom initialized
               isPanning = true;
               isDrawing = false;
               lastMouseX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
               lastMouseY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+              
+              initialPinchDistance = Math.hypot(
+                  e.touches[0].clientX - e.touches[1].clientX,
+                  e.touches[0].clientY - e.touches[1].clientY
+              );
           } else if (e.touches.length === 1) {
               // One finger = Draw
               isDrawing = true;
@@ -295,13 +299,30 @@
 
       canvas.addEventListener('touchmove', (e) => {
           e.preventDefault();
+          
           if (isPanning && e.touches.length === 2) {
+              // Handle Panning
               const currentX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
               const currentY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
               cameraX += currentX - lastMouseX;
               cameraY += currentY - lastMouseY;
               lastMouseX = currentX; lastMouseY = currentY;
+
+              // Handle Zooming
+              if (initialPinchDistance !== null) {
+                  const currentDistance = Math.hypot(
+                      e.touches[0].clientX - e.touches[1].clientX,
+                      e.touches[0].clientY - e.touches[1].clientY
+                  );
+                  
+                  const delta = currentDistance - initialPinchDistance;
+                  CELL_SIZE += delta * 0.1; // 0.1 acts as the zoom speed dampener
+                  CELL_SIZE = Math.min(Math.max(CELL_SIZE, 5), 50); 
+                  
+                  initialPinchDistance = currentDistance; // Reset for next tick
+              }
               drawGrid();
+              
           } else if (isDrawing && e.touches.length === 1) {
               const pos = getLogicalPos(e.touches[0].clientX, e.touches[0].clientY);
               if (pos.x !== lastCellX || pos.y !== lastCellY) {
@@ -313,8 +334,13 @@
       }, { passive: false });
 
       canvas.addEventListener('touchend', (e) => {
-          if (e.touches.length < 2) isPanning = false;
-          if (e.touches.length === 0) isDrawing = false;
+          if (e.touches.length < 2) {
+              isPanning = false;
+              initialPinchDistance = null;
+          }
+          if (e.touches.length === 0) {
+              isDrawing = false;
+          }
       });
   </script>
 </body>

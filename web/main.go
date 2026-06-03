@@ -12,7 +12,7 @@ import (
 func fromPairs(arr []int32) gol.Grid {
 	grid := make(gol.Grid)
 	for i := 0; i < len(arr); i += 2 {
-		cell := gol.Cell{X: int(arr[i]), Y: int(arr[i + 1])}
+		cell := gol.Cell{X: int(arr[i]), Y: int(arr[i+1])}
 		grid[cell] = nil
 	}
 	return grid
@@ -21,7 +21,7 @@ func fromPairs(arr []int32) gol.Grid {
 // Input is fed as [Cell{X1, Y1}, Cell{X2, Y2}, ...]
 // Output as [x1, y1, x2, y2, ...]
 func toPairs(grid gol.Grid) []int32 {
-	var res []int32	
+	var res []int32
 	for cell := range grid {
 		res = append(res, int32(cell.X), int32(cell.Y))
 	}
@@ -38,7 +38,7 @@ func main() {
 		// Capture JS Int32array from function args
 		jsArr := args[0]
 		length := jsArr.Get("length").Int()
-		if length % 2 == 1 {
+		if length%2 == 1 {
 			return map[string]any{"success": false, "data": nil, "error": "Expected even number of elements in Grid"}
 		}
 
@@ -49,12 +49,12 @@ func main() {
 
 		// Access the underlying Uint8Array representation in JS
 		jsUint8Buffer := js.Global().Get("Uint8Array").New(
-			jsArr.Get("buffer"), jsArr.Get("byteOffset"), 
-			length * 4, // int32 = 4 bytes
+			jsArr.Get("buffer"), jsArr.Get("byteOffset"),
+			length*4, // int32 = 4 bytes
 		)
 
 		// Allocate a raw byte slice in Go and copy memory
-		goByteSlice := make([]byte, length * 4)
+		goByteSlice := make([]byte, length*4)
 		js.CopyBytesToGo(goByteSlice, jsUint8Buffer)
 
 		// Reinterpret the byte slice as an int32 slice
@@ -70,7 +70,7 @@ func main() {
 		}
 
 		// Type cast back to uint8 buffer
-		goUint8Slice := unsafe.Slice((*uint8)(unsafe.Pointer(&goSlice[0])), len(goSlice) * 4)
+		goUint8Slice := unsafe.Slice((*uint8)(unsafe.Pointer(&goSlice[0])), len(goSlice)*4)
 		jsUint8Buffer = js.Global().Get("Uint8Array").New(len(goUint8Slice))
 		js.CopyBytesToJS(jsUint8Buffer, goUint8Slice)
 
