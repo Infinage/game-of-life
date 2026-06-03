@@ -102,7 +102,7 @@
 
       // --- Wasm Initialization ---
       const go = new Go();
-      WebAssembly.instantiateStreaming(fetch("gol.wasm"), go.importObject).then((result) => {
+      WebAssembly.instantiateStreaming(fetch("main.wasm"), go.importObject).then((result) => {
           go.run(result.instance); 
           drawGrid();
       }).catch(err => console.error("Wasm Init Error:", err));
