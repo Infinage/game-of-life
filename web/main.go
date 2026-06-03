@@ -42,6 +42,11 @@ func main() {
 			return map[string]any{"success": false, "data": nil, "error": "Expected even number of elements in Grid"}
 		}
 
+		// On zero length input, return empty result
+		if length == 0 {
+			return map[string]any{"success": true, "data": js.Global().Get("Uint8Array").New(0), "error": ""}
+		}
+
 		// Access the underlying Uint8Array representation in JS
 		jsUint8Buffer := js.Global().Get("Uint8Array").New(
 			jsArr.Get("buffer"), jsArr.Get("byteOffset"), 
@@ -60,7 +65,11 @@ func main() {
 		grid.Next()
 
 		// Write back as []int32
-		goSlice = toPairs(grid)
+		if goSlice = toPairs(grid); len(goSlice) == 0 {
+			return map[string]any{"success": true, "data": js.Global().Get("Uint8Array").New(0), "error": ""}
+		}
+
+		// Type cast back to uint8 buffer
 		goUint8Slice := unsafe.Slice((*uint8)(unsafe.Pointer(&goSlice[0])), len(goSlice) * 4)
 		jsUint8Buffer = js.Global().Get("Uint8Array").New(len(goUint8Slice))
 		js.CopyBytesToJS(jsUint8Buffer, goUint8Slice)

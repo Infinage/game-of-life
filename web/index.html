@@ -2,33 +2,320 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Game of Life</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Conway's Game of Life (Wasm)</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
     <script src="wasm_exec.js"></script>
-</head>
-<body>
-    <script>
-        // Initialize the Wasm Module
-        const go = new Go();
-        WebAssembly.instantiateStreaming(fetch("gol.wasm"), go.importObject).then((result) => {
-            go.run(result.instance); // calls main() from `main.go`
-            console.log("Wasm initialized!");
-            runTest();
-        });
-
-        function runTest() {
-            // A horizontal blinker: (-1,0), (0,0), (1,0)
-            const blinker = new Int32Array([-1, 0, 0, 0, 1, 0]);
-            
-            console.log("Initial state (Int32Array):", blinker);
-            const res = GOLNext(blinker);
-
-            if (res.success) {
-                const nextGen = new Int32Array(res.data.buffer);
-                console.log("Next generation (Int32Array):", nextGen);
-            } else {
-                console.error("Wasm Error:", res.error);
-            }
+    
+    <style>
+        .arcade-text {
+            font-family: 'Press Start 2P', cursive;
+            text-shadow: 2px 2px 0px #ff00ff, -2px -2px 0px #00ffff;
         }
-    </script>
+        /* Prevent elastic bouncing on mobile iOS */
+        body { 
+            overflow: hidden; 
+            touch-action: none; 
+        }
+    </style>
+</head>
+<body class="bg-gray-900 h-screen flex flex-col text-white">
+  
+  <main class="flex flex-col h-full w-full">
+    <header class="bg-gray-900 border-b-4 border-blue-500 p-3 md:p-4 flex-shrink-0 shadow-lg z-10">
+      <h1 class="text-xl md:text-3xl text-center text-yellow-400 tracking-widest arcade-text leading-relaxed">
+        CONWAY'S GAME OF LIFE
+      </h1>
+    </header>
+    
+    <div id="canvasContainer" class="flex-grow w-full overflow-hidden bg-gray-800 border-b-4 border-gray-700 relative">
+        <canvas id="gameCanvas" class="block image-render-pixelated cursor-crosshair w-full h-full"></canvas>
+    </div>
+    
+    <div class="flex-shrink-0 bg-gray-900 flex justify-center items-center p-4 gap-3 flex-wrap shadow-[0_-10px_15px_-3px_rgba(0,0,0,0.5)] z-20">
+        
+        <button id="playBtn" class="flex items-center justify-center gap-2 py-3 px-5 uppercase rounded-xl cursor-pointer bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold transition-colors shadow-md min-w-[140px]">
+            <div id="playState" class="flex items-center gap-2">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M4.5 5.653c0-1.427 1.529-2.33 2.779-1.643l11.54 6.347c1.295.712 1.295 2.573 0 3.286L7.28 19.99c-1.25.687-2.779-.217-2.779-1.643V5.653Z" clip-rule="evenodd" /></svg>
+                <span>Start</span>
+            </div>
+            <div id="pauseState" class="hidden items-center gap-2">
+                <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M6.75 5.25a.75.75 0 0 1 .75-.75H9a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H7.5a.75.75 0 0 1-.75-.75V5.25Zm7.5 0A.75.75 0 0 1 15 4.5h1.5a.75.75 0 0 1 .75.75v13.5a.75.75 0 0 1-.75.75H15a.75.75 0 0 1-.75-.75V5.25Z" clip-rule="evenodd" /></svg>
+                <span>Pause</span>
+            </div>
+        </button>
+        
+        <button id="nextBtn" class="flex items-center justify-center gap-2 py-3 px-5 uppercase rounded-xl cursor-pointer bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white font-bold disabled:opacity-50 disabled:cursor-not-allowed transition-colors shadow-md">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M13.28 11.47a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 0 1-1.06-1.06L11.69 12 8.97 9.28a.75.75 0 0 1 1.06-1.06l3.25 3.25Zm4.5 0a.75.75 0 0 1 0 1.06l-3.25 3.25a.75.75 0 1 1-1.06-1.06L16.19 12l-2.72-2.72a.75.75 0 1 1 1.06-1.06l3.25 3.25Z" clip-rule="evenodd" /></svg>
+            <span class="hidden sm:inline">Next</span>
+        </button>
+        
+        <button id="clearBtn" class="flex items-center justify-center gap-2 py-3 px-5 uppercase rounded-xl cursor-pointer bg-red-600 hover:bg-red-500 active:bg-red-700 text-white font-bold transition-colors shadow-md">
+            <svg viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5"><path fill-rule="evenodd" d="M5.47 5.47a.75.75 0 0 1 1.06 0L12 10.94l5.47-5.47a.75.75 0 1 1 1.06 1.06L13.06 12l5.47 5.47a.75.75 0 1 1-1.06 1.06L12 13.06l-5.47 5.47a.75.75 0 0 1-1.06-1.06L10.94 12 5.47 6.53a.75.75 0 0 1 0-1.06Z" clip-rule="evenodd" /></svg>
+            <span class="hidden sm:inline">Clear</span>
+        </button>
+
+        <div class="flex items-center gap-2 bg-gray-800 px-4 py-3 rounded-xl border border-gray-600 shadow-inner w-full sm:w-auto justify-between">
+            <label for="speedSlider" class="text-gray-300 font-bold uppercase text-xs tracking-wider">Speed</label>
+            <input type="range" id="speedSlider" min="0.5" max="20" step="0.5" value="5" class="cursor-pointer w-full sm:w-24 accent-blue-500 mx-2">
+            <span id="speedDisplay" class="text-yellow-400 w-16 text-right font-mono text-sm">5 fps</span>
+        </div>
+    </div>
+  </main>
+
+  <script>
+      // ==========================================
+      // GAME STATE
+      // ==========================================
+      let liveCells = new Int32Array([0,-1, 1,0, -1,1, 0,1, 1,1]); // Glider
+      let CELL_SIZE = 20;
+      
+      const canvas = document.getElementById('gameCanvas');
+      const container = document.getElementById('canvasContainer');
+      const ctx = canvas.getContext('2d');
+      
+      let cameraX = 0;
+      let cameraY = 0;
+      
+      let isPlaying = false;
+      let loopId = null;
+      let currentFPS = 5;
+
+      let isPanning = false;
+      let isDrawing = false;
+      let paintMode = true;
+      let lastCellX = null;
+      let lastCellY = null;
+      let lastMouseX = 0;
+      let lastMouseY = 0;
+
+      // --- Responsive Canvas Sizing ---
+      const resizeObserver = new ResizeObserver(() => {
+          canvas.width = container.clientWidth;
+          canvas.height = container.clientHeight;
+          cameraX = canvas.width / 2;
+          cameraY = canvas.height / 2;
+          drawGrid();
+      });
+      resizeObserver.observe(container);
+
+      // --- Wasm Initialization ---
+      const go = new Go();
+      WebAssembly.instantiateStreaming(fetch("gol.wasm"), go.importObject).then((result) => {
+          go.run(result.instance); 
+          drawGrid();
+      }).catch(err => console.error("Wasm Init Error:", err));
+
+      // ==========================================
+      // UI CONTROLS & LOGIC
+      // ==========================================
+      const playBtn = document.getElementById('playBtn');
+      const playState = document.getElementById('playState');
+      const pauseState = document.getElementById('pauseState');
+      const nextBtn = document.getElementById('nextBtn');
+      const clearBtn = document.getElementById('clearBtn');
+      const speedSlider = document.getElementById('speedSlider');
+      const speedDisplay = document.getElementById('speedDisplay');
+
+      function updatePlayState(playing) {
+          isPlaying = playing;
+          if (isPlaying) {
+              playState.classList.add('hidden');
+              playState.classList.remove('flex');
+              pauseState.classList.remove('hidden');
+              pauseState.classList.add('flex');
+          } else {
+              pauseState.classList.add('hidden');
+              pauseState.classList.remove('flex');
+              playState.classList.remove('hidden');
+              playState.classList.add('flex');
+          }
+          nextBtn.disabled = isPlaying;
+          if (isPlaying) {
+              loopId = setInterval(advanceGeneration, 1000 / currentFPS);
+          } else {
+              clearInterval(loopId);
+          }
+      }
+
+      playBtn.addEventListener('click', () => updatePlayState(!isPlaying));
+      nextBtn.addEventListener('click', () => { if (!isPlaying) advanceGeneration(); });
+      clearBtn.addEventListener('click', () => {
+          liveCells = new Int32Array(0); 
+          updatePlayState(false);
+          drawGrid();
+      });
+      speedSlider.addEventListener('input', (e) => {
+          currentFPS = parseFloat(e.target.value);
+          speedDisplay.innerText = `${currentFPS} fps`;
+          if (isPlaying) {
+              clearInterval(loopId);
+              loopId = setInterval(advanceGeneration, 1000 / currentFPS);
+          }
+      });
+
+      // ==========================================
+      // CORE LOGIC & RENDERING
+      // ==========================================
+      function advanceGeneration() {
+          if (liveCells.length === 0) return;
+          const res = GOLNext(liveCells);
+          if (res.success) {
+              liveCells = new Int32Array(res.data.buffer);
+              drawGrid();
+          } else {
+              console.error("Wasm Error:", res.error);
+              updatePlayState(false); 
+          }
+      }
+
+      function drawGrid() {
+          ctx.fillStyle = "#1e293b"; 
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#22d3ee"; 
+
+          for (let i = 0; i < liveCells.length; i += 2) {
+              const screenX = cameraX + (liveCells[i] * CELL_SIZE);
+              const screenY = cameraY + (liveCells[i+1] * CELL_SIZE);
+              if (screenX > -CELL_SIZE && screenX < canvas.width && screenY > -CELL_SIZE && screenY < canvas.height) {
+                  const GAP = Math.max(1, CELL_SIZE / 15);
+                  ctx.fillRect(screenX, screenY, CELL_SIZE - GAP, CELL_SIZE - GAP);
+              }
+          }
+      }
+
+      function isAlive(x, y) {
+          for (let i = 0; i < liveCells.length; i += 2) {
+              if (liveCells[i] === x && liveCells[i+1] === y) return i;
+          }
+          return -1;
+      }
+
+      function setCellState(x, y, makeAlive) {
+          const index = isAlive(x, y);
+          if (makeAlive && index === -1) {
+              const nextGen = new Int32Array(liveCells.length + 2);
+              nextGen.set(liveCells, 0);
+              nextGen[nextGen.length - 2] = x;
+              nextGen[nextGen.length - 1] = y;
+              liveCells = nextGen;
+          } else if (!makeAlive && index !== -1) {
+              const nextGen = new Int32Array(liveCells.length - 2);
+              nextGen.set(liveCells.subarray(0, index), 0);
+              nextGen.set(liveCells.subarray(index + 2), index);
+              liveCells = nextGen;
+          }
+      }
+
+      // ==========================================
+      // INPUT EVENT LISTENERS (Mouse & Touch)
+      // ==========================================
+      canvas.addEventListener('contextmenu', e => e.preventDefault());
+
+      // Helper to get logical coordinates
+      function getLogicalPos(clientX, clientY) {
+          const rect = canvas.getBoundingClientRect();
+          return {
+              x: Math.floor(((clientX - rect.left) - cameraX) / CELL_SIZE),
+              y: Math.floor(((clientY - rect.top) - cameraY) / CELL_SIZE)
+          };
+      }
+
+      // --- Mouse Events ---
+      canvas.addEventListener('wheel', (e) => {
+          e.preventDefault();
+          CELL_SIZE += e.deltaY > 0 ? -2 : 2;
+          CELL_SIZE = Math.min(Math.max(CELL_SIZE, 5), 50);
+          drawGrid();
+      }, { passive: false });
+
+      canvas.addEventListener('mousedown', (e) => {
+          if (e.button === 2 || e.shiftKey) {
+              isPanning = true;
+              canvas.classList.replace('cursor-crosshair', 'cursor-grabbing');
+              lastMouseX = e.clientX;
+              lastMouseY = e.clientY;
+              return;
+          }
+          if (e.button === 0) {
+              isDrawing = true;
+              const pos = getLogicalPos(e.clientX, e.clientY);
+              paintMode = isAlive(pos.x, pos.y) === -1;
+              setCellState(pos.x, pos.y, paintMode);
+              lastCellX = pos.x; lastCellY = pos.y;
+              drawGrid();
+          }
+      });
+
+      canvas.addEventListener('mousemove', (e) => {
+          if (isPanning) {
+              cameraX += e.clientX - lastMouseX;
+              cameraY += e.clientY - lastMouseY;
+              lastMouseX = e.clientX; lastMouseY = e.clientY;
+              drawGrid();
+              return;
+          }
+          if (isDrawing) {
+              const pos = getLogicalPos(e.clientX, e.clientY);
+              if (pos.x !== lastCellX || pos.y !== lastCellY) {
+                  setCellState(pos.x, pos.y, paintMode);
+                  lastCellX = pos.x; lastCellY = pos.y;
+                  drawGrid();
+              }
+          }
+      });
+
+      const stopInteraction = () => {
+          isPanning = false; isDrawing = false;
+          canvas.classList.replace('cursor-grabbing', 'cursor-crosshair');
+      };
+      window.addEventListener('mouseup', stopInteraction);
+      canvas.addEventListener('mouseleave', stopInteraction);
+
+      // --- Touch Events (Mobile) ---
+      canvas.addEventListener('touchstart', (e) => {
+          e.preventDefault(); // Stop mobile scroll pull-to-refresh
+          if (e.touches.length === 2) {
+              // Two fingers = Pan
+              isPanning = true;
+              isDrawing = false;
+              lastMouseX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+              lastMouseY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+          } else if (e.touches.length === 1) {
+              // One finger = Draw
+              isDrawing = true;
+              const pos = getLogicalPos(e.touches[0].clientX, e.touches[0].clientY);
+              paintMode = isAlive(pos.x, pos.y) === -1;
+              setCellState(pos.x, pos.y, paintMode);
+              lastCellX = pos.x; lastCellY = pos.y;
+              drawGrid();
+          }
+      }, { passive: false });
+
+      canvas.addEventListener('touchmove', (e) => {
+          e.preventDefault();
+          if (isPanning && e.touches.length === 2) {
+              const currentX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+              const currentY = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+              cameraX += currentX - lastMouseX;
+              cameraY += currentY - lastMouseY;
+              lastMouseX = currentX; lastMouseY = currentY;
+              drawGrid();
+          } else if (isDrawing && e.touches.length === 1) {
+              const pos = getLogicalPos(e.touches[0].clientX, e.touches[0].clientY);
+              if (pos.x !== lastCellX || pos.y !== lastCellY) {
+                  setCellState(pos.x, pos.y, paintMode);
+                  lastCellX = pos.x; lastCellY = pos.y;
+                  drawGrid();
+              }
+          }
+      }, { passive: false });
+
+      canvas.addEventListener('touchend', (e) => {
+          if (e.touches.length < 2) isPanning = false;
+          if (e.touches.length === 0) isDrawing = false;
+      });
+  </script>
 </body>
 </html>
